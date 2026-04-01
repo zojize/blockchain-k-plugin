@@ -97,6 +97,20 @@ struct string *hook_KRYPTO_sha256(struct string *str) {
   return hexEncode(digest, sizeof(digest));
 }
 
+struct string *hook_KRYPTO_sha1raw(struct string *str) {
+  SHA1 h;
+  unsigned char digest[20];
+  h.CalculateDigest(digest, (unsigned char *)str->data, len(str));
+  return raw(digest, sizeof(digest));
+}
+
+struct string *hook_KRYPTO_sha1(struct string *str) {
+  SHA1 h;
+  unsigned char digest[20];
+  h.CalculateDigest(digest, (unsigned char *)str->data, len(str));
+  return hexEncode(digest, sizeof(digest));
+}
+
 struct string *hook_KRYPTO_ripemd160raw(struct string *str) {
   RIPEMD160 h;
   unsigned char digest[20];

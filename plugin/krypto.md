@@ -37,6 +37,7 @@ For hooked hash functions, we provide both hex-encoded and raw versions of each 
                     | Sha512 ( Bytes )                            [function, hook(KRYPTO.sha512)]
                     | "Sha512_256" "(" Bytes ")"                  [function, hook(KRYPTO.sha512_256)]
                     | "Sha3_256" "(" Bytes ")"                    [function, hook(KRYPTO.sha3)]
+                    | Sha1 ( Bytes )                              [function, hook(KRYPTO.sha1)]
                     | RipEmd160 ( Bytes )                         [function, hook(KRYPTO.ripemd160)]
                     | Blake2Compress ( Bytes )                    [function, hook(KRYPTO.blake2compress)]
  // ---------------------------------------------------------------------------------------------------------
@@ -52,6 +53,7 @@ These functions compute the same hash function as those named above except that 
                     | Sha512raw ( Bytes )                         [function, hook(KRYPTO.sha512raw)]
                     | "Sha512_256raw" "(" Bytes ")"               [function, hook(KRYPTO.sha512_256raw)]
                     | "Sha3_256raw" "(" Bytes ")"                 [function, hook(KRYPTO.sha3raw)]
+                    | Sha1raw ( Bytes )                           [function, hook(KRYPTO.sha1raw)]
                     | RipEmd160raw ( Bytes )                      [function, hook(KRYPTO.ripemd160raw)]
  // -------------------------------------------------------------------------------------------------------
 ```
