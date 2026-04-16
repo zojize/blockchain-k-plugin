@@ -118,6 +118,30 @@ struct string *hook_KRYPTO_ripemd160raw(struct string *str) {
   return raw(digest, sizeof(digest));
 }
 
+// Combined hash hooks. The K LLVM Python runtime mis-marshals nested
+// hook calls (e.g. RipEmd160raw(Sha256raw(V))) — the inner call's
+// result is passed to the outer hook as 0xffffffff, causing a SIGSEGV.
+// Exposing single-call combined hooks avoids the buggy composition.
+struct string *hook_KRYPTO_hash160raw(struct string *str) {
+  SHA256 s;
+  unsigned char inner[32];
+  s.CalculateDigest(inner, (unsigned char *)str->data, len(str));
+  RIPEMD160 r;
+  unsigned char digest[20];
+  r.CalculateDigest(digest, inner, sizeof(inner));
+  return raw(digest, sizeof(digest));
+}
+
+struct string *hook_KRYPTO_hash256raw(struct string *str) {
+  SHA256 s1;
+  unsigned char inner[32];
+  s1.CalculateDigest(inner, (unsigned char *)str->data, len(str));
+  SHA256 s2;
+  unsigned char digest[32];
+  s2.CalculateDigest(digest, inner, sizeof(inner));
+  return raw(digest, sizeof(digest));
+}
+
 struct string *hook_KRYPTO_ripemd160(struct string *str) {
   RIPEMD160 h;
   unsigned char digest[20];

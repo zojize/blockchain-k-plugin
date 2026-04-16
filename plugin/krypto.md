@@ -55,6 +55,8 @@ These functions compute the same hash function as those named above except that 
                     | "Sha3_256raw" "(" Bytes ")"                 [function, hook(KRYPTO.sha3raw)]
                     | Sha1raw ( Bytes )                           [function, hook(KRYPTO.sha1raw)]
                     | RipEmd160raw ( Bytes )                      [function, hook(KRYPTO.ripemd160raw)]
+                    | Hash160raw ( Bytes )                        [function, hook(KRYPTO.hash160raw)]
+                    | Hash256raw ( Bytes )                        [function, hook(KRYPTO.hash256raw)]
  // -------------------------------------------------------------------------------------------------------
 ```
 
