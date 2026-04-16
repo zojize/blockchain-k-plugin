@@ -4,6 +4,8 @@
 #include <cryptopp/sha3.h>
 #include <openssl/evp.h>
 #include <secp256k1_recovery.h>
+#include <secp256k1_extrakeys.h>
+#include <secp256k1_schnorrsig.h>
 #include <vector>
 
 #include <libff/algebra/curves/alt_bn128/alt_bn128_pp.hpp>
@@ -140,6 +142,96 @@ struct string *hook_KRYPTO_hash256raw(struct string *str) {
   unsigned char digest[32];
   s2.CalculateDigest(digest, inner, sizeof(inner));
   return raw(digest, sizeof(digest));
+}
+
+// Schnorr signature verification (BIP 340).
+// pubkey: 32-byte x-only, msg: 32-byte message hash, sig: 64-byte signature.
+// Returns 1-byte "\x01" (true) or "\x00" (false).
+bool hook_KRYPTO_schnorrVerify(struct string *pubkey, struct string *msg,
+                               struct string *sig) {
+  if (len(pubkey) != 32 || len(msg) != 32 || len(sig) != 64) {
+    return false;
+  }
+  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+  secp256k1_xonly_pubkey xpk;
+  if (!secp256k1_xonly_pubkey_parse(ctx, &xpk,
+                                    (unsigned char *)pubkey->data)) {
+    secp256k1_context_destroy(ctx);
+    return false;
+  }
+  int ok = secp256k1_schnorrsig_verify(ctx, (unsigned char *)sig->data,
+                                       (unsigned char *)msg->data, 32, &xpk);
+  secp256k1_context_destroy(ctx);
+  return ok == 1;
+}
+
+// Taproot output key verification (BIP 341).
+// Checks that output_key == internal_key tweaked by tweak_hash.
+// output_key: 32-byte x-only pubkey (the witness program)
+// internal_key: 32-byte x-only pubkey (from control block)
+// merkle_root: 32-byte hash (or 0 bytes for key-path-only tweak)
+// Returns true if the tweak produces the expected output key.
+bool hook_KRYPTO_taprootCheckOutput(struct string *output_key,
+                                    struct string *internal_key,
+                                    struct string *merkle_root) {
+  if (len(output_key) != 32 || len(internal_key) != 32) {
+    return false;
+  }
+  if (len(merkle_root) != 0 && len(merkle_root) != 32) {
+    return false;
+  }
+
+  secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
+
+  // Parse the internal key
+  secp256k1_xonly_pubkey int_pk;
+  if (!secp256k1_xonly_pubkey_parse(ctx, &int_pk,
+                                    (unsigned char *)internal_key->data)) {
+    secp256k1_context_destroy(ctx);
+    return false;
+  }
+
+  // Compute the tagged hash tweak: SHA256(SHA256("TapTweak") || SHA256("TapTweak") || internal_key || merkle_root)
+  // We use secp256k1's xonly_pubkey_tweak_add which handles the tweak computation
+  // But we need to compute the tweak hash ourselves:
+  // tweak = TaggedHash("TapTweak", internal_key || merkle_root)
+  SHA256 h1;
+  unsigned char tag_hash[32];
+  const unsigned char *tag = (const unsigned char *)"TapTweak";
+  h1.CalculateDigest(tag_hash, tag, 8);
+
+  SHA256 h2;
+  h2.Update(tag_hash, 32);
+  h2.Update(tag_hash, 32);
+  h2.Update((unsigned char *)internal_key->data, 32);
+  if (len(merkle_root) == 32) {
+    h2.Update((unsigned char *)merkle_root->data, 32);
+  }
+  unsigned char tweak[32];
+  h2.Final(tweak);
+
+  // Convert internal key to a full pubkey for tweaking
+  secp256k1_pubkey full_pk;
+  if (!secp256k1_xonly_pubkey_tweak_add(ctx, &full_pk, &int_pk, tweak)) {
+    secp256k1_context_destroy(ctx);
+    return false;
+  }
+
+  // Extract the x-only tweaked key and compare
+  secp256k1_xonly_pubkey tweaked_xpk;
+  int parity;
+  if (!secp256k1_xonly_pubkey_from_pubkey(ctx, &tweaked_xpk, &parity,
+                                           &full_pk)) {
+    secp256k1_context_destroy(ctx);
+    return false;
+  }
+
+  unsigned char tweaked_bytes[32];
+  secp256k1_xonly_pubkey_serialize(ctx, tweaked_bytes, &tweaked_xpk);
+
+  bool match = memcmp(tweaked_bytes, output_key->data, 32) == 0;
+  secp256k1_context_destroy(ctx);
+  return match;
 }
 
 struct string *hook_KRYPTO_ripemd160(struct string *str) {

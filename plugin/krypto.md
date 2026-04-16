@@ -76,6 +76,20 @@ As such, we we hide them behind a separate tangle tag to avoid breaking projects
  // --------------------------------------------------------------------------------------------------------
 ```
 
+Schnorr / Taproot Functions
+---------------------------
+
+For Bitcoin taproot (BIP 340/341):
+
+-   `SchnorrVerify` takes a 32-byte x-only public key, a 32-byte message hash, and a 64-byte Schnorr signature and returns true if the signature is valid.
+-   `TaprootCheckOutput` takes a 32-byte output key (witness program), a 32-byte internal key, and a 32-byte merkle root (or empty bytes for key-path-only) and returns true if the output key equals the tweaked internal key.
+
+```k
+    syntax Bool ::= SchnorrVerify ( Bytes, Bytes, Bytes )       [function, hook(KRYPTO.schnorrVerify)]
+                  | TaprootCheckOutput ( Bytes, Bytes, Bytes )  [function, hook(KRYPTO.taprootCheckOutput)]
+ // ----------------------------------------------------------------------------------------------------
+```
+
 ECDSA Functions
 ---------------
 
