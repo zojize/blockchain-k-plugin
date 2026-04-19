@@ -170,16 +170,26 @@ bool hook_KRYPTO_schnorrVerify(struct string *pubkey, struct string *msg,
 // output_key: 32-byte x-only pubkey (the witness program)
 // internal_key: 32-byte x-only pubkey (from control block)
 // merkle_root: 32-byte hash (or 0 bytes for key-path-only tweak)
-// Returns true if the tweak produces the expected output key.
+// expected_parity: 0 or 1 (from bit 0 of the control block's first byte,
+//                  per BIP-341). Must match the computed parity of the
+//                  tweaked pubkey.
+// Returns true if the tweak produces the expected output key AND the
+// computed parity matches expected_parity.
 bool hook_KRYPTO_taprootCheckOutput(struct string *output_key,
                                     struct string *internal_key,
-                                    struct string *merkle_root) {
+                                    struct string *merkle_root,
+                                    mpz_t expected_parity) {
   if (len(output_key) != 32 || len(internal_key) != 32) {
     return false;
   }
   if (len(merkle_root) != 0 && len(merkle_root) != 32) {
     return false;
   }
+  // expected_parity must be 0 or 1
+  if (mpz_cmp_ui(expected_parity, 1) > 0) {
+    return false;
+  }
+  unsigned long expected_parity_ui = mpz_get_ui(expected_parity);
 
   secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_VERIFY);
 
@@ -210,28 +220,13 @@ bool hook_KRYPTO_taprootCheckOutput(struct string *output_key,
   unsigned char tweak[32];
   h2.Final(tweak);
 
-  // Convert internal key to a full pubkey for tweaking
-  secp256k1_pubkey full_pk;
-  if (!secp256k1_xonly_pubkey_tweak_add(ctx, &full_pk, &int_pk, tweak)) {
-    secp256k1_context_destroy(ctx);
-    return false;
-  }
-
-  // Extract the x-only tweaked key and compare
-  secp256k1_xonly_pubkey tweaked_xpk;
-  int parity;
-  if (!secp256k1_xonly_pubkey_from_pubkey(ctx, &tweaked_xpk, &parity,
-                                           &full_pk)) {
-    secp256k1_context_destroy(ctx);
-    return false;
-  }
-
-  unsigned char tweaked_bytes[32];
-  secp256k1_xonly_pubkey_serialize(ctx, tweaked_bytes, &tweaked_xpk);
-
-  bool match = memcmp(tweaked_bytes, output_key->data, 32) == 0;
+  // Use secp256k1_xonly_pubkey_tweak_add_check which verifies both the
+  // output key bytes AND the parity in one call, per BIP-341.
+  bool ok = secp256k1_xonly_pubkey_tweak_add_check(
+      ctx, (const unsigned char *)output_key->data, (int)expected_parity_ui,
+      &int_pk, tweak);
   secp256k1_context_destroy(ctx);
-  return match;
+  return ok;
 }
 
 struct string *hook_KRYPTO_ripemd160(struct string *str) {

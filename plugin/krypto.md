@@ -82,12 +82,12 @@ Schnorr / Taproot Functions
 For Bitcoin taproot (BIP 340/341):
 
 -   `SchnorrVerify` takes a 32-byte x-only public key, a 32-byte message hash, and a 64-byte Schnorr signature and returns true if the signature is valid.
--   `TaprootCheckOutput` takes a 32-byte output key (witness program), a 32-byte internal key, and a 32-byte merkle root (or empty bytes for key-path-only) and returns true if the output key equals the tweaked internal key.
+-   `TaprootCheckOutput` takes a 32-byte output key (witness program), a 32-byte internal key, a 32-byte merkle root (or empty bytes for key-path-only), and an Int expected parity (0 or 1, from the control block's first byte bit 0 per BIP-341). Returns true if the x-only tweaked internal key equals the output key AND the computed parity matches the expected parity.
 
 ```k
-    syntax Bool ::= SchnorrVerify ( Bytes, Bytes, Bytes )       [function, hook(KRYPTO.schnorrVerify)]
-                  | TaprootCheckOutput ( Bytes, Bytes, Bytes )  [function, hook(KRYPTO.taprootCheckOutput)]
- // ----------------------------------------------------------------------------------------------------
+    syntax Bool ::= SchnorrVerify ( Bytes, Bytes, Bytes )            [function, hook(KRYPTO.schnorrVerify)]
+                  | TaprootCheckOutput ( Bytes, Bytes, Bytes, Int )  [function, hook(KRYPTO.taprootCheckOutput)]
+ // ---------------------------------------------------------------------------------------------------------
 ```
 
 ECDSA Functions
