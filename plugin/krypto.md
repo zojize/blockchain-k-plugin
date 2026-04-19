@@ -60,6 +60,23 @@ These functions compute the same hash function as those named above except that 
  // -------------------------------------------------------------------------------------------------------
 ```
 
+### Streaming SHA-256
+
+For callers that need to hash large buffers assembled piecewise (Bitcoin sighash preimages, Ethereum RLP encodings, etc.) without materializing the full concatenation as `Bytes`. K's `+Bytes` is O(n) per call, so bytewise assembly of an N-chunk preimage is O(N²); streaming lets the caller stay O(N).
+
+The state is an opaque `Bytes` blob holding the raw byte image of a CryptoPP SHA256 instance. It is safe to pass between rule invocations within one execution; do not persist or move across process boundaries.
+
+-   `Sha256Init()` returns the initial 104-byte state.
+-   `Sha256Update(state, chunk)` returns a new state incorporating `chunk`. Call repeatedly to feed the preimage piecewise.
+-   `Sha256Final(state)` returns the 32-byte raw digest.
+
+```k
+    syntax Bytes ::= "Sha256Init" "(" ")"                         [function, total, hook(KRYPTO.sha256Init)]
+                    | Sha256Update ( Bytes , Bytes )              [function, total, hook(KRYPTO.sha256Update)]
+                    | Sha256Final ( Bytes )                       [function, total, hook(KRYPTO.sha256Final)]
+ // -------------------------------------------------------------------------------------------------------
+```
+
 ### Other Hooked Hash Functions
 
 These hooked hash functions are broken on default Ubuntu installations because of either a bug in `libcrypto++` package, or it isn't in that version of the library.

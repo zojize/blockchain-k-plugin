@@ -8,6 +8,25 @@
 #include <secp256k1_schnorrsig.h>
 #include <vector>
 
+// OpenSSL's `openssl/sha.h` declares a top-level `SHA256` function that
+// name-collides with `CryptoPP::SHA256` once `using namespace CryptoPP`
+// is in effect below. We re-declare just the three SHA256_CTX APIs we
+// need with the struct laid out inline — this matches the layout OpenSSL
+// has stabilized in its public header since 1.0.x. Do not use these
+// OpenSSL functions outside the streaming hooks; everywhere else uses
+// the CryptoPP classes already linked.
+extern "C" {
+  typedef struct {
+    unsigned int h[8];
+    unsigned int Nl, Nh;
+    unsigned int data[16];
+    unsigned int num, md_len;
+  } Plugin_SHA256_CTX;
+  int SHA256_Init(Plugin_SHA256_CTX *c);
+  int SHA256_Update(Plugin_SHA256_CTX *c, const void *data, size_t len);
+  int SHA256_Final(unsigned char *md, Plugin_SHA256_CTX *c);
+}
+
 #include <libff/algebra/curves/alt_bn128/alt_bn128_pp.hpp>
 #include <libff/common/profiling.hpp>
 
@@ -97,6 +116,50 @@ struct string *hook_KRYPTO_sha256(struct string *str) {
   unsigned char digest[32];
   h.CalculateDigest(digest, (unsigned char *)str->data, len(str));
   return hexEncode(digest, sizeof(digest));
+}
+
+// Streaming SHA-256 for O(n) sighash / preimage-hash construction.
+//
+// Callers build a preimage hash as Sha256Final(Sha256Update(...(
+//   Sha256Update(Sha256Init(), chunk_1), ...), chunk_n)), walking a
+// transaction structure without ever materializing the full preimage
+// as K Bytes. Needed because K's `+Bytes` is O(n) per call, which
+// makes bytewise preimage construction O(n²) for large transactions.
+//
+// State is the raw byte image of an OpenSSL SHA256_CTX. It is a plain
+// C struct (no vtable, no owning pointers), so memcpy round-trips
+// produce an equivalent context. Each Update creates a fresh image
+// so the hooks remain pure over K values.
+//
+// OpenSSL's SHA256_Init/Update/Final are deprecated in 3.x but still
+// present; EVP_* would require handle allocation which is exactly
+// what this layout avoids.
+struct string *hook_KRYPTO_sha256Init() {
+  Plugin_SHA256_CTX ctx;
+  SHA256_Init(&ctx);
+  return raw((unsigned char *)&ctx, sizeof(ctx));
+}
+
+struct string *hook_KRYPTO_sha256Update(struct string *state,
+                                        struct string *data) {
+  if (len(state) != sizeof(Plugin_SHA256_CTX)) {
+    return raw((unsigned char *)"", 0);
+  }
+  Plugin_SHA256_CTX ctx;
+  memcpy(&ctx, state->data, sizeof(ctx));
+  SHA256_Update(&ctx, data->data, len(data));
+  return raw((unsigned char *)&ctx, sizeof(ctx));
+}
+
+struct string *hook_KRYPTO_sha256Final(struct string *state) {
+  if (len(state) != sizeof(Plugin_SHA256_CTX)) {
+    return raw((unsigned char *)"", 0);
+  }
+  Plugin_SHA256_CTX ctx;
+  memcpy(&ctx, state->data, sizeof(ctx));
+  unsigned char digest[32];
+  SHA256_Final(digest, &ctx);
+  return raw(digest, sizeof(digest));
 }
 
 struct string *hook_KRYPTO_sha1raw(struct string *str) {
